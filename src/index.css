@@ -1,0 +1,95 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-headline: 'Playfair Display', serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  --color-primary: #7c2343;
+  --color-primary-hover: #731d39;
+  --color-primary-container: #9a3b5a;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #ffc7d3;
+  --color-primary-fixed: #ffd9e0;
+  --color-on-primary-fixed: #3f001a;
+
+  --color-secondary: #894c5c;
+  --color-secondary-blush: #f4a7b9;
+  --color-secondary-container: #ffb1c3;
+  --color-on-secondary: #ffffff;
+  --color-on-secondary-container: #7b4050;
+
+  --color-tertiary: #004e48;
+  --color-tertiary-emerald: #0f766e;
+  --color-tertiary-container: #006861;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-fixed: #9cf2e8;
+  --color-tertiary-fixed-dim: #80d5cb;
+
+  --color-surface: #f9f9f6;
+  --color-surface-container: #eeeeeb;
+  --color-surface-container-low: #f4f4f1;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-high: #e8e8e5;
+  --color-surface-variant: #e2e3e0;
+  --color-on-surface: #1a1c1b;
+  --color-on-surface-variant: #544246;
+  --color-outline: #877276;
+  --color-outline-variant: #dac0c5;
+  --color-inverse-surface: #2f312f;
+
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100dvh;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-surface);
+    color: var(--color-on-surface);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+
+  ::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@utility font-headline {
+  font-family: var(--font-headline);
+}
+
+@keyframes soft-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 78, 72, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(0, 78, 72, 0);
+  }
+}
+
+.soft-pulse {
+  animation: soft-pulse 3s infinite;
+}
