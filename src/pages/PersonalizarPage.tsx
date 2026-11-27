@@ -2,69 +2,80 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/layout/AppShell'
 import { Icon } from '../components/ui/Icon'
+import { BouquetCanvas } from '../components/canvas/BouquetCanvas'
 import { useCheckout } from '../context/CheckoutContext'
-import { ENVIO_CDMX, LISTONES, PAPELES, RAMOS_EXPRESS } from '../lib/atelier'
+import {
+  COLORES_MONO,
+  ENVIO_CDMX,
+  EXTRAS_LUJO,
+  LISTONES,
+  PAPELES,
+  PRECIO_PLIEGO_COMBINADO,
+  RAMOS_EXPRESS,
+} from '../lib/atelier'
 import { formatMxn } from '../lib/format'
 import { waUrl } from '../lib/whatsapp'
 import type { MetodoEntrega, Producto } from '../types/models'
-
-const COLOR_TINTS: Record<string, { hex: string; filter: string; blend: string; opacity: number }> = {
-  'Vino Tinto Real': {
-    hex: '#7C2343',
-    filter: 'hue-rotate(330deg) saturate(1.8) brightness(0.75)',
-    blend: 'multiply',
-    opacity: 0.55,
-  },
-  'Rosa Pastel': {
-    hex: '#F4A7B9',
-    filter: 'hue-rotate(320deg) saturate(1.2) brightness(1.2)',
-    blend: 'screen',
-    opacity: 0.45,
-  },
-  'Rojo Carmín': {
-    hex: '#BA1A1A',
-    filter: 'hue-rotate(350deg) saturate(2.2) brightness(0.85)',
-    blend: 'color',
-    opacity: 0.65,
-  },
-  'Negro Satinado': {
-    hex: '#1A1C1B',
-    filter: 'grayscale(1) brightness(0.4)',
-    blend: 'color-burn',
-    opacity: 0.7,
-  },
-}
-
-const EXTRAS = [
-  { id: 'perlas', label: 'Corona de Perlas Artesanal', precio: 150, icon: 'flare' },
-  { id: 'mariposas', label: 'Mariposas Doradas 3D', precio: 90, icon: 'auto_awesome' },
-  { id: 'luz', label: 'Guía de Micro LED Cálida', precio: 120, icon: 'lightbulb' },
-]
 
 export function PersonalizarPage() {
   const navigate = useNavigate()
   const { startCheckout } = useCheckout()
 
+  // 1. Cantidad de rosas
   const [rosas, setRosas] = useState<6 | 12 | 24 | 50>(12)
-  const [liston, setListon] = useState<string>('Vino Tinto Real')
-  const [papel, setPapel] = useState<string>('Traslúcido con Borde Dorado')
+
+  // 2. Color de rosas (máximo 2 colores combinados)
+  const [rosaColor1Id, setRosaColor1Id] = useState<string>('Vino Tinto Real')
+  const [combinarRosas, setCombinarRosas] = useState<boolean>(false)
+  const [rosaColor2Id, setRosaColor2Id] = useState<string>('Rosa Pastel')
+
+  // 3. Envoltura de papel coreano (máximo 2 colores combinados)
+  const [papelColor1Id, setPapelColor1Id] = useState<string>('marfil')
+  const [esPliegoCombinado, setEsPliegoCombinado] = useState<boolean>(false)
+  const [papelColor2Id, setPapelColor2Id] = useState<string>('dorado')
+
+  // 4. Color del moño / listón (independiente)
+  const [monoColorId, setMonoColorId] = useState<string>('Vino Tinto Real')
+
+  // 5. Extras de lujo
   const [extrasSeleccionados, setExtrasSeleccionados] = useState<string[]>([])
+
+  // 6. Dedicatoria
   const [para, setPara] = useState('')
   const [de, setDe] = useState('')
   const [mensajeCaligrafia, setMensajeCaligrafia] = useState('')
+
+  // 7. Entrega
   const [entrega, setEntrega] = useState<MetodoEntrega>('envio')
 
-  // Cálculos de costo
+  // Búsqueda de objetos seleccionados
+  const colorRosa1 = LISTONES.find((l) => l.id === rosaColor1Id) ?? LISTONES[0]
+  const colorRosa2 = LISTONES.find((l) => l.id === rosaColor2Id) ?? LISTONES[3]
+  const papel1 = PAPELES.find((p) => p.id === papelColor1Id) ?? PAPELES[0]
+  const papel2 = PAPELES.find((p) => p.id === papelColor2Id) ?? PAPELES[4]
+  const colorMono = COLORES_MONO.find((m) => m.id === monoColorId) ?? COLORES_MONO[0]
+
+  // Formateo de descripciones de color
+  const textoColorRosas =
+    combinarRosas && rosaColor1Id !== rosaColor2Id
+      ? `${colorRosa1.nombre} + ${colorRosa2.nombre} (Bicolor)`
+      : colorRosa1.nombre
+
+  const textoColorPapel =
+    esPliegoCombinado && papelColor1Id !== papelColor2Id
+      ? `${papel1.nombre} + ${papel2.nombre} (Bicolor)`
+      : papel1.nombre
+
+  // Cálculos de costos
   const ramoBase = RAMOS_EXPRESS.find((r) => r.rosas === rosas) ?? RAMOS_EXPRESS[1]
   const costoRamo = ramoBase.precioUnitario
-  const costoExtras = extrasSeleccionados.reduce((total, id) => {
-    const extra = EXTRAS.find((e) => e.id === id)
-    return total + (extra ? extra.precio : 0)
+  const costoPliegoCombinado = esPliegoCombinado ? PRECIO_PLIEGO_COMBINADO : 0
+  const costoExtras = extrasSeleccionados.reduce((acc, id) => {
+    const extra = EXTRAS_LUJO.find((e) => e.id === id)
+    return acc + (extra ? extra.precio : 0)
   }, 0)
   const costoEnvio = entrega === 'envio' ? ENVIO_CDMX.precio : 0
-  const total = costoRamo + costoExtras + costoEnvio
-
-  const tint = COLOR_TINTS[liston] ?? COLOR_TINTS['Vino Tinto Real']
+  const total = costoRamo + costoPliegoCombinado + costoExtras + costoEnvio
 
   const toggleExtra = (id: string) => {
     setExtrasSeleccionados((prev) =>
@@ -74,24 +85,32 @@ export function PersonalizarPage() {
 
   // Generar producto virtual personalizado para el Checkout
   const handleContinuarCheckout = () => {
+    const extrasTexto =
+      extrasSeleccionados.length > 0
+        ? extrasSeleccionados
+            .map((id) => EXTRAS_LUJO.find((e) => e.id === id)?.label)
+            .filter(Boolean)
+            .join(', ')
+        : 'Sin extras'
+
     const productoPersonalizado: Producto = {
       id: `custom-${Date.now()}`,
       sku: `DE-CUSTOM-${rosas}`,
-      nombre: `Ramo Personalizado ${rosas} Rosas (${liston})`,
-      descripcion: `${papel} • Dedicatoria: "${mensajeCaligrafia || 'Sin mensaje'}"`,
+      nombre: `Ramo Personalizado ${rosas} Rosas (${textoColorRosas})`,
+      descripcion: `Papel: ${textoColorPapel} • Moño: ${colorMono.nombre} • Extras: ${extrasTexto} • Dedicatoria: "${mensajeCaligrafia || 'Sin mensaje'}"`,
       tipo: 'arreglo',
       categoria: 'Personalizados',
       ocasion: 'todas',
       coleccion: 'coreanos',
-      color: liston,
+      color: textoColorRosas,
       piezas: rosas,
       stock: 10,
       badge: 'Diseño Taller 3D',
       image_url:
         'https://lh3.googleusercontent.com/aida-public/AB6AXuBVYbOe-FfiYcIag0TEkc_uNkqoR7X8jqt0HeNNa_ss-7J2n0UksQnJd0TFKkokJgFpY66Fkafbf3AxikOhKbViA_7_lMEfPL4gRre6_AALy1UfQnutbzDUW3B0XZfWHZVoYAdQeCVGkHyZkw7J8Iqjj6RZanCKbOE1M3yinnp_hoEA3ZzNNGBHT0trWnFNWgxZaVukDX11C0vaGZkKvUCwvb7vip3Ilw-vWu8tjyU',
       estado: 'activo',
-      precioUnitario: costoRamo + costoExtras,
-      montoAnticipo: Math.round((costoRamo + costoExtras) / 2),
+      precioUnitario: costoRamo + costoPliegoCombinado + costoExtras,
+      montoAnticipo: Math.round((costoRamo + costoPliegoCombinado + costoExtras) / 2),
       tasaIva: 0.16,
       ivaIncluido: true,
       creadoEn: new Date().toISOString(),
@@ -103,20 +122,27 @@ export function PersonalizarPage() {
   }
 
   const mensajeWhatsApp = `🌸 *Cotización Ramo Personalizado - Atelier 3D CDMX*
-Hola Dulce Eternidad, diseñé un ramo en la web con estas especificaciones:
+Hola Dulce Eternidad, diseñé un ramo en su Taller 3D con estas especificaciones:
 • *Cantidad:* ${rosas} Rosas Eternas
-• *Color de cinta:* ${liston}
-• *Papel coreano:* ${papel}
-• *Extras:* ${extrasSeleccionados.length > 0 ? extrasSeleccionados.join(', ') : 'Ninguno'}
+• *Color de rosas:* ${textoColorRosas}
+• *Color de papel:* ${textoColorPapel}
+• *Color del moño:* ${colorMono.nombre}
+• *Extras de lujo:* ${
+    extrasSeleccionados.length > 0
+      ? extrasSeleccionados
+          .map((id) => EXTRAS_LUJO.find((e) => e.id === id)?.label)
+          .join(', ')
+      : 'Ninguno'
+  }
 • *Entrega:* ${entrega === 'envio' ? 'Envío a domicilio CDMX' : 'Recoger en taller'}
 • *Para:* ${para || 'N/A'} (De: ${de || 'N/A'})
-• *Dedicatoria:* "${mensajeCaligrafia || 'Sin dedicatoria'}"
+• *Dedicatoria manuscrita:* "${mensajeCaligrafia || 'Sin dedicatoria'}"
 • *Total estimado:* ${formatMxn(total)} MXN
 
-¿Podrían confirmarme si pueden confeccionarlo para esta semana? ✨`
+¿Podrían confirmarme si pueden confeccionarlo? ✨`
 
   return (
-    <AppShell kicker="Taller 3D">
+    <AppShell kicker="Taller 3D" showFab={false}>
       <div className="flex flex-col gap-6 md:gap-8 pb-12">
         {/* Encabezado */}
         <div className="flex flex-col gap-1">
@@ -128,57 +154,48 @@ Hola Dulce Eternidad, diseñé un ramo en la web con estas especificaciones:
             Diseña tu Propio Ramo Eterno
           </h2>
           <p className="text-[12px] md:text-[13px] text-on-surface-variant max-w-2xl leading-relaxed">
-            Personaliza el tamaño, color del satín con tintado visual en vivo, envoltura de alta gama y dedicatoria manuscrita con caligrafía.
+            Personaliza el tamaño, combinación de rosas, envoltura coreana y moño satinado con vista previa fotorrealista.
           </p>
         </div>
 
         {/* Layout en 2 Columnas en lg: */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* COLUMNA IZQUIERDA (lg:col-span-5 lg:sticky lg:top-24): Visualizador Reactivo en Vivo */}
+          {/* COLUMNA IZQUIERDA (lg:col-span-5 lg:sticky lg:top-24): Visualizador por Capas */}
           <div className="lg:col-span-5 lg:sticky lg:top-24 flex flex-col gap-4">
-            <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl bg-surface-container shadow-xl ring-1 ring-surface-variant/80">
-              {/* Imagen Base del Ramo */}
-              <img
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBVYbOe-FfiYcIag0TEkc_uNkqoR7X8jqt0HeNNa_ss-7J2n0UksQnJd0TFKkokJgFpY66Fkafbf3AxikOhKbViA_7_lMEfPL4gRre6_AALy1UfQnutbzDUW3B0XZfWHZVoYAdQeCVGkHyZkw7J8Iqjj6RZanCKbOE1M3yinnp_hoEA3ZzNNGBHT0trWnFNWgxZaVukDX11C0vaGZkKvUCwvb7vip3Ilw-vWu8tjyU"
-                alt="Ramo base"
-                className="h-full w-full object-cover transition-all duration-700"
-                style={{
-                  transform:
-                    rosas === 6
-                      ? 'scale(0.88)'
-                      : rosas === 12
-                        ? 'scale(1)'
-                        : rosas === 24
-                          ? 'scale(1.08)'
-                          : 'scale(1.18)',
-                }}
+            <div className="relative">
+              {/* Bouquet Canvas: Teñido con el primer color seleccionado */}
+              <BouquetCanvas
+                cantidad={rosas}
+                rosaColor={colorRosa1.hex}
+                rosaColorNombre={textoColorRosas}
+                papelColor1={papel1.hex}
+                papelColor1Nombre={textoColorPapel}
+                monoColor={colorMono.hex}
+                monoColorNombre={colorMono.nombre}
+                esPliegoCombinado={esPliegoCombinado}
+                papelColor2={papel2.hex}
+                papelColor2Nombre={papel2.nombre}
+                extras={extrasSeleccionados}
               />
 
-              {/* Capa de Tintado CSS Reactivo */}
-              <div
-                className="absolute inset-0 pointer-events-none transition-all duration-500"
-                style={{
-                  backgroundColor: tint.hex,
-                  mixBlendMode: tint.blend as never,
-                  opacity: tint.opacity,
-                }}
-              />
-
-              {/* Badge Dinámico de Selección */}
-              <div className="absolute top-4 left-4 flex flex-col items-start gap-1.5">
-                <span className="rounded-full bg-surface-container-lowest/90 px-3 py-1 text-[11px] font-bold text-primary shadow-sm backdrop-blur-md">
-                  {rosas} Rosas • {liston}
+              {/* Badges Flotantes Informativos con Especificaciones Claras */}
+              <div className="absolute top-3 left-3 flex flex-col items-start gap-1.5 pointer-events-none z-50">
+                <span className="rounded-full bg-surface-container-lowest/95 px-3 py-1 text-[11px] font-bold text-primary shadow-sm backdrop-blur-md">
+                  🌹 {rosas} Rosas • {textoColorRosas}
                 </span>
-                <span className="rounded-full bg-black/60 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-sm backdrop-blur-md">
-                  {papel}
+                <span className="rounded-full bg-black/70 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-sm backdrop-blur-md">
+                  📜 Papel: {textoColorPapel}
+                </span>
+                <span className="rounded-full bg-surface-container-lowest/95 px-2.5 py-0.5 text-[10px] font-bold text-on-surface shadow-sm backdrop-blur-md">
+                  🎀 Moño: {colorMono.nombre}
                 </span>
               </div>
 
-              {/* Extras activos sobre la foto */}
+              {/* Badges de Extras activos */}
               {extrasSeleccionados.length > 0 && (
-                <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-1.5 pointer-events-none">
+                <div className="absolute bottom-3 left-3 right-3 flex flex-wrap gap-1.5 pointer-events-none z-50">
                   {extrasSeleccionados.map((id) => {
-                    const extra = EXTRAS.find((e) => e.id === id)
+                    const extra = EXTRAS_LUJO.find((e) => e.id === id)
                     return (
                       <span
                         key={id}
@@ -215,7 +232,7 @@ Hola Dulce Eternidad, diseñé un ramo en la web con estas especificaciones:
             </div>
           </div>
 
-          {/* COLUMNA DERECHA (lg:col-span-7): Formulario Interactivo */}
+          {/* COLUMNA DERECHA (lg:col-span-7): Formulario y Controles */}
           <div className="lg:col-span-7 flex flex-col gap-6">
             {/* 1. Cantidad de Rosas */}
             <section className="rounded-2xl bg-surface-container-lowest p-5 shadow-sm ring-1 ring-surface-variant/60">
@@ -247,77 +264,235 @@ Hola Dulce Eternidad, diseñé un ramo en la web con estas especificaciones:
               </div>
             </section>
 
-            {/* 2. Color de Listón Satinado */}
+            {/* 2. Color de las Rosas (1 o 2 colores combinados) */}
+            <section className="rounded-2xl bg-surface-container-lowest p-5 shadow-sm ring-1 ring-surface-variant/60 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block">
+                    2. Color de las Flores (Rosas Eternas)
+                  </label>
+                  <span className="text-[11px] font-bold text-primary">
+                    {textoColorRosas}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCombinarRosas(!combinarRosas)}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold transition-all ${
+                    combinarRosas
+                      ? 'bg-primary text-on-primary shadow-xs'
+                      : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  <Icon name={combinarRosas ? 'check_circle' : 'add_circle'} className="text-[14px]" />
+                  <span>{combinarRosas ? 'Flores Bicolor (2 tonos)' : 'Combinar 2 colores'}</span>
+                </button>
+              </div>
+
+              {/* Color Principal */}
+              <div>
+                <span className="text-[10px] font-bold text-on-surface-variant uppercase block mb-1.5">
+                  Tono Principal de Rosas:
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {LISTONES.map((item) => {
+                    const selected = rosaColor1Id === item.id
+                    return (
+                      <button
+                        key={`rosa1-${item.id}`}
+                        type="button"
+                        onClick={() => setRosaColor1Id(item.id)}
+                        className={`flex items-center gap-2.5 rounded-xl p-2.5 text-left transition-all ${
+                          selected
+                            ? 'bg-secondary-container/30 ring-2 ring-primary shadow-sm'
+                            : 'bg-surface-container-low text-on-surface ring-1 ring-surface-variant/60 hover:bg-surface-container'
+                        }`}
+                      >
+                        <span
+                          className="h-5 w-5 shrink-0 rounded-full border-2 border-white shadow-sm ring-1 ring-black/10"
+                          style={{ backgroundColor: item.hex }}
+                        />
+                        <span className="truncate text-[12px] font-bold">{item.nombre}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Segundo Tono de Rosas (Solo si activa combinar, máximo 2 colores) */}
+              {combinarRosas && (
+                <div className="rounded-xl bg-secondary-container/20 border border-primary/20 p-3.5 flex flex-col gap-2 animate-fade-in">
+                  <span className="text-[10px] font-bold text-primary uppercase">
+                    Segundo Color Combinado de Rosas (Máx. 2 colores):
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {LISTONES.map((item) => {
+                      const selected = rosaColor2Id === item.id
+                      return (
+                        <button
+                          key={`rosa2-${item.id}`}
+                          type="button"
+                          onClick={() => setRosaColor2Id(item.id)}
+                          className={`flex items-center gap-2.5 rounded-xl p-2 text-left transition-all ${
+                            selected
+                              ? 'bg-primary text-on-primary shadow-xs ring-1 ring-primary'
+                              : 'bg-surface-container-lowest text-on-surface ring-1 ring-surface-variant/60 hover:bg-surface-container'
+                          }`}
+                        >
+                          <span
+                            className="h-4 w-4 shrink-0 rounded-full border border-white/60 shadow-xs"
+                            style={{ backgroundColor: item.hex }}
+                          />
+                          <span className="truncate text-[11px] font-bold">{item.nombre}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* 3. Envoltura de Papel Coreano (1 o 2 colores combinados) */}
+            <section className="rounded-2xl bg-surface-container-lowest p-5 shadow-sm ring-1 ring-surface-variant/60 flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block">
+                    3. Envoltura de Papel Coreano
+                  </label>
+                  <span className="text-[11px] font-bold text-primary">
+                    {textoColorPapel}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEsPliegoCombinado(!esPliegoCombinado)}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold transition-all ${
+                    esPliegoCombinado
+                      ? 'bg-primary text-on-primary shadow-xs'
+                      : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  <Icon name={esPliegoCombinado ? 'check_circle' : 'add_circle'} className="text-[14px]" />
+                  <span>{esPliegoCombinado ? 'Papel Bicolor (+ $35)' : 'Combinar 2 papeles'}</span>
+                </button>
+              </div>
+
+              {/* Pliego Principal */}
+              <div>
+                <span className="text-[10px] font-bold text-on-surface-variant uppercase block mb-1.5">
+                  Pliego Principal de Papel:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {PAPELES.map((item) => {
+                    const selected = papelColor1Id === item.id
+                    return (
+                      <button
+                        key={`papel1-${item.id}`}
+                        type="button"
+                        onClick={() => setPapelColor1Id(item.id)}
+                        className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-left transition-all ${
+                          selected
+                            ? 'bg-secondary-container/30 text-on-surface ring-2 ring-primary shadow-xs'
+                            : 'bg-surface-container-low text-on-surface ring-1 ring-surface-variant/60 hover:bg-surface-container'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className="h-4 w-4 shrink-0 rounded-full border border-black/20"
+                            style={{ backgroundColor: item.hex }}
+                          />
+                          <span className="text-[12px] font-bold">{item.nombre}</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-on-surface-variant">Incluido</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Pliego Secundario (Si está activo el toggle, límite 2 papeles) */}
+              {esPliegoCombinado && (
+                <div className="rounded-xl bg-secondary-container/20 border border-primary/20 p-3.5 flex flex-col gap-2.5 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-primary uppercase tracking-wider">
+                      Pliego Secundario / Interior (Máx. 2 colores):
+                    </span>
+                    <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                      + {formatMxn(PRECIO_PLIEGO_COMBINADO)} MXN
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {PAPELES.map((item) => {
+                      const selected = papelColor2Id === item.id
+                      return (
+                        <button
+                          key={`papel2-${item.id}`}
+                          type="button"
+                          onClick={() => setPapelColor2Id(item.id)}
+                          className={`flex items-center justify-between rounded-xl px-3 py-2 text-left transition-all ${
+                            selected
+                              ? 'bg-primary text-on-primary shadow-xs'
+                              : 'bg-surface-container-lowest text-on-surface ring-1 ring-surface-variant/60 hover:bg-surface-container'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="h-4 w-4 shrink-0 rounded-full border border-black/20"
+                              style={{ backgroundColor: item.hex }}
+                            />
+                            <span className="text-[11px] font-bold">{item.nombre}</span>
+                          </div>
+                          {selected && <Icon name="check" className="text-[15px]" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* 4. Color del Moño de Satín (Selector independiente) */}
             <section className="rounded-2xl bg-surface-container-lowest p-5 shadow-sm ring-1 ring-surface-variant/60">
-              <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block mb-3">
-                2. Color de Cinta Satinada (Tintado en vivo)
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {LISTONES.map((item) => {
-                  const selected = liston === item.id
-                  const tintData = COLOR_TINTS[item.id] ?? COLOR_TINTS['Vino Tinto Real']
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider">
+                  4. Color del Moño de Satín (Listón)
+                </label>
+                <span className="text-[11px] font-bold text-primary">
+                  {colorMono.nombre}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {COLORES_MONO.map((item) => {
+                  const selected = monoColorId === item.id
                   return (
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => setListon(item.id)}
-                      className={`flex items-center gap-3 rounded-2xl p-3 text-left transition-all ${
+                      onClick={() => setMonoColorId(item.id)}
+                      className={`flex items-center gap-2 rounded-xl p-2.5 text-left transition-all ${
                         selected
-                          ? 'bg-primary text-on-primary shadow-sm'
+                          ? 'bg-secondary-container/30 ring-2 ring-primary shadow-sm'
                           : 'bg-surface-container-low text-on-surface ring-1 ring-surface-variant/60 hover:bg-surface-container'
                       }`}
                     >
                       <span
-                        className="h-5 w-5 shrink-0 rounded-full border-2 border-white/60 shadow-sm"
-                        style={{ backgroundColor: tintData.hex }}
+                        className="h-5 w-5 shrink-0 rounded-full border-2 border-white shadow-sm ring-1 ring-black/10"
+                        style={{ backgroundColor: item.hex }}
                       />
-                      <span className="truncate text-[12px] font-bold">{item.id}</span>
+                      <span className="truncate text-[11px] font-bold">{item.nombre}</span>
                     </button>
                   )
                 })}
               </div>
             </section>
 
-            {/* 3. Envoltura Papel Coreano */}
+            {/* 5. Toques de Lujo Artesanales (Opcional) */}
             <section className="rounded-2xl bg-surface-container-lowest p-5 shadow-sm ring-1 ring-surface-variant/60">
               <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block mb-3">
-                3. Envoltura & Pliegues de Papel Coreano
-              </label>
-              <div className="flex flex-col gap-2">
-                {PAPELES.map((item) => {
-                  const selected = papel === item
-                  return (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => setPapel(item)}
-                      className={`flex items-center justify-between rounded-xl px-4 py-3 text-left transition-all ${
-                        selected
-                          ? 'bg-secondary-container/20 text-on-surface ring-2 ring-primary'
-                          : 'bg-surface-container-low text-on-surface ring-1 ring-surface-variant/60 hover:bg-surface-container'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Icon
-                          name="layers"
-                          className={`text-[17px] ${selected ? 'text-primary' : 'text-on-surface-variant'}`}
-                        />
-                        <span className="text-[12px] font-bold">{item}</span>
-                      </div>
-                      <span className="text-[10px] font-bold text-on-surface-variant">Incluido</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </section>
-
-            {/* 4. Aditamentos de Lujo (Opcionales) */}
-            <section className="rounded-2xl bg-surface-container-lowest p-5 shadow-sm ring-1 ring-surface-variant/60">
-              <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block mb-3">
-                4. Toques de Lujo Artesanales (Opcional)
+                5. Toques de Lujo Artesanales (Opcional)
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {EXTRAS.map((extra) => {
+                {EXTRAS_LUJO.map((extra) => {
                   const active = extrasSeleccionados.includes(extra.id)
                   return (
                     <button
@@ -343,10 +518,10 @@ Hola Dulce Eternidad, diseñé un ramo en la web con estas especificaciones:
               </div>
             </section>
 
-            {/* 5. Dedicatoria para Caligrafía */}
+            {/* 6. Dedicatoria para Caligrafía */}
             <section className="rounded-2xl bg-surface-container-lowest p-5 shadow-sm ring-1 ring-surface-variant/60">
               <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block mb-3">
-                5. Dedicatoria Manuscrita
+                6. Dedicatoria Manuscrita
               </label>
               <div className="flex flex-col gap-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -385,10 +560,10 @@ Hola Dulce Eternidad, diseñé un ramo en la web con estas especificaciones:
               </div>
             </section>
 
-            {/* 6. Método de Entrega */}
+            {/* 7. Método de Entrega en CDMX */}
             <section className="rounded-2xl bg-surface-container-lowest p-5 shadow-sm ring-1 ring-surface-variant/60">
               <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block mb-3">
-                6. Método de Entrega en CDMX
+                7. Método de Entrega en CDMX
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -425,18 +600,23 @@ Hola Dulce Eternidad, diseñé un ramo en la web con estas especificaciones:
 
             {/* Barra de Cotización en Vivo y Botones de Acción */}
             <div className="rounded-2xl bg-surface-container-low p-5 flex flex-col gap-3 ring-1 ring-surface-variant/60">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
-                    Cotización Total
+                    Cotización Total del Ramo
                   </span>
                   <p className="font-headline text-2xl font-bold text-primary">
                     {formatMxn(total)} <span className="text-[12px] font-normal text-on-surface-variant">MXN</span>
                   </p>
                 </div>
-                <span className="rounded-full bg-tertiary-fixed/40 px-3 py-1 text-[11px] font-bold text-tertiary">
-                  Anticipo sugerido: {formatMxn(Math.round(total / 2))} MXN
-                </span>
+                <div className="flex flex-col sm:items-end">
+                  <span className="rounded-full bg-tertiary-fixed/40 px-3 py-1 text-[11px] font-bold text-tertiary">
+                    Anticipo sugerido (50%): {formatMxn(Math.round(total / 2))} MXN
+                  </span>
+                  <span className="text-[10px] text-on-surface-variant mt-1">
+                    {rosas} Rosas ({textoColorRosas}) • {esPliegoCombinado ? 'Papel Bicolor (+ $35)' : 'Papel único'}
+                  </span>
+                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-2.5 pt-2 border-t border-surface-variant/40">

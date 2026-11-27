@@ -67,6 +67,9 @@ export function useCatalog() {
 
   useEffect(() => {
     void load()
+    const handleUpdate = () => void load()
+    window.addEventListener('catalogo-updated', handleUpdate)
+    return () => window.removeEventListener('catalogo-updated', handleUpdate)
   }, [load])
 
   // Combinación (intersección) de ambos filtros

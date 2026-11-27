@@ -1,7 +1,68 @@
 import { api } from './client'
 import { USE_MOCKS } from '../lib/env'
 import { PRODUCTOS_MOCK } from '../mocks/products.mock'
-import type { CrearProductoRequest, ListaRespuesta, Producto } from '../types/models'
+import type { CrearProductoRequest, EstadoCatalogo, ListaRespuesta, Producto } from '../types/models'
+
+const STORAGE_KEY_PRODUCTOS = 'de-catalogo-productos'
+
+export function obtenerProductosMemoria(): Producto[] {
+  if (typeof window === 'undefined') return [...PRODUCTOS_MOCK]
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PRODUCTOS)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+      }
+    }
+  } catch (e) {
+    console.warn('Error al leer productos de localStorage:', e)
+  }
+  guardarProductosMemoria([...PRODUCTOS_MOCK])
+  return [...PRODUCTOS_MOCK]
+}
+
+export function guardarProductosMemoria(lista: Producto[]) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(STORAGE_KEY_PRODUCTOS, JSON.stringify(lista))
+    window.dispatchEvent(new Event('catalogo-updated'))
+  } catch (e) {
+    console.warn('Error al guardar productos en localStorage:', e)
+  }
+}
+
+export function actualizarProductoCatalogo(id: string, updates: Partial<Producto>): Producto | null {
+  const lista = obtenerProductosMemoria()
+  const idx = lista.findIndex((p) => p.id === id)
+  if (idx === -1) return null
+
+  const actualizado = {
+    ...lista[idx],
+    ...updates,
+    actualizadoEn: new Date().toISOString(),
+  }
+  lista[idx] = actualizado
+  guardarProductosMemoria(lista)
+  return actualizado
+}
+
+export function toggleAgotadoProducto(id: string): Producto | null {
+  const lista = obtenerProductosMemoria()
+  const prod = lista.find((p) => p.id === id)
+  if (!prod) return null
+
+  const esAgotado = prod.estado === 'agotado' || prod.stock === 0
+  const nuevoEstado: EstadoCatalogo = esAgotado ? 'activo' : 'agotado'
+  const nuevoStock = esAgotado ? 6 : 0
+  const nuevoBadge = esAgotado ? undefined : 'Agotado'
+
+  return actualizarProductoCatalogo(id, {
+    estado: nuevoEstado,
+    stock: nuevoStock,
+    badge: nuevoBadge,
+  })
+}
 
 function asProducto(raw: Record<string, unknown>): Producto {
   const precio = Number(raw.precioUnitario ?? raw.precio_unitario ?? raw.precio ?? 0)
@@ -32,8 +93,8 @@ function asProducto(raw: Record<string, unknown>): Producto {
 
 export async function fetchProductos(): Promise<Producto[]> {
   if (USE_MOCKS) {
-    await new Promise((r) => setTimeout(r, 280))
-    return PRODUCTOS_MOCK
+    await new Promise((r) => setTimeout(r, 60))
+    return obtenerProductosMemoria()
   }
 
   const payload = await api.get<ListaRespuesta<Record<string, unknown>> | Record<string, unknown>[]>(
@@ -45,6 +106,7 @@ export async function fetchProductos(): Promise<Producto[]> {
 
 export async function createProducto(body: CrearProductoRequest): Promise<Producto> {
   if (USE_MOCKS) {
+    const isAgotado = body.estado === 'agotado' || body.stock === 0
     const nuevo: Producto = {
       id: crypto.randomUUID(),
       sku: `DE-${Date.now()}`,
@@ -53,11 +115,12 @@ export async function createProducto(body: CrearProductoRequest): Promise<Produc
       tipo: 'arreglo',
       categoria: 'Ramos',
       ocasion: body.ocasion,
-      coleccion: 'clasicos',
+      coleccion: body.coleccion ?? 'clasicos',
       piezas: body.piezas,
-      stock: 1,
+      stock: isAgotado ? 0 : (body.stock ?? 1),
       image_url: body.image_url,
-      estado: 'activo',
+      estado: isAgotado ? 'agotado' : (body.estado ?? 'activo'),
+      badge: isAgotado ? 'Agotado' : undefined,
       precioUnitario: body.precioUnitario,
       montoAnticipo: body.precioUnitario,
       tasaIva: 0.16,
@@ -65,7 +128,9 @@ export async function createProducto(body: CrearProductoRequest): Promise<Produc
       creadoEn: new Date().toISOString(),
       actualizadoEn: new Date().toISOString(),
     }
-    PRODUCTOS_MOCK.unshift(nuevo)
+    const lista = obtenerProductosMemoria()
+    lista.unshift(nuevo)
+    guardarProductosMemoria(lista)
     return nuevo
   }
 

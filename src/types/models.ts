@@ -127,7 +127,10 @@ export interface CrearProductoRequest {
   precioUnitario: number
   piezas: number
   ocasion: string
+  coleccion?: string
   image_url: string | null
+  stock?: number
+  estado?: EstadoCatalogo
 }
 
 export interface UploadImageResponse {
