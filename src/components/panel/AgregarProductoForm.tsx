@@ -2,10 +2,12 @@ import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react'
 import {
   createProducto,
   uploadProductoImagen,
+  fetchProductos,
   obtenerProductosMemoria,
   toggleAgotadoProducto,
   actualizarProductoCatalogo,
 } from '../../api/products'
+import { fetchCatalogos, type CatalogosAgrupados } from '../../api/catalogos'
 import { isApiError } from '../../api/client'
 import { Icon } from '../ui/Icon'
 import { COLECCIONES, OCASIONES } from '../../lib/atelier'
@@ -47,17 +49,39 @@ export function AgregarProductoForm({ onSuccess, onCancel }: AgregarProductoForm
   const [filtroAdmin, setFiltroAdmin] = useState<FiltroAdmin>('todos')
   const [busquedaAdmin, setBusquedaAdmin] = useState('')
   const [mensajeAdmin, setMensajeAdmin] = useState<string | null>(null)
+  const [catalogosBD, setCatalogosBD] = useState<CatalogosAgrupados>({})
 
-  const recargarCatalogo = () => {
-    setCatalogo(obtenerProductosMemoria())
+  const recargarCatalogo = async () => {
+    try {
+      const items = await fetchProductos()
+      setCatalogo(items)
+    } catch {
+      setCatalogo(obtenerProductosMemoria())
+    }
   }
 
   useEffect(() => {
     recargarCatalogo()
-    const handleUpdate = () => recargarCatalogo()
+    fetchCatalogos().then(setCatalogosBD)
+    const handleUpdate = () => {
+      recargarCatalogo()
+      fetchCatalogos().then(setCatalogosBD)
+    }
     window.addEventListener('catalogo-updated', handleUpdate)
-    return () => window.removeEventListener('catalogo-updated', handleUpdate)
+    window.addEventListener('catalogos-updated', handleUpdate)
+    return () => {
+      window.removeEventListener('catalogo-updated', handleUpdate)
+      window.removeEventListener('catalogos-updated', handleUpdate)
+    }
   }, [])
+
+  const listaOcasiones = catalogosBD.Ocasiones && catalogosBD.Ocasiones.length > 0
+    ? catalogosBD.Ocasiones.map((o) => ({ id: o.clave, label: o.nombre }))
+    : OCASIONES
+
+  const listaColecciones = catalogosBD.Colecciones && catalogosBD.Colecciones.length > 0
+    ? catalogosBD.Colecciones.map((c) => ({ id: c.clave, label: c.nombre }))
+    : COLECCIONES
 
   const handleToggleAgotado = (id: string, nombreRamo: string) => {
     const res = toggleAgotadoProducto(id)
@@ -507,7 +531,7 @@ export function AgregarProductoForm({ onSuccess, onCancel }: AgregarProductoForm
                     onChange={(e) => setOcasion(e.target.value)}
                     className="mt-1 w-full rounded-xl bg-surface-container-low px-3.5 py-2.5 text-[12px] font-semibold text-on-surface ring-1 ring-surface-variant/70 outline-none"
                   >
-                    {OCASIONES.map((o) => (
+                    {listaOcasiones.map((o) => (
                       <option key={o.id} value={o.id}>
                         {o.label}
                       </option>
@@ -524,7 +548,7 @@ export function AgregarProductoForm({ onSuccess, onCancel }: AgregarProductoForm
                     onChange={(e) => setColeccion(e.target.value)}
                     className="mt-1 w-full rounded-xl bg-surface-container-low px-3.5 py-2.5 text-[12px] font-semibold text-on-surface ring-1 ring-surface-variant/70 outline-none"
                   >
-                    {COLECCIONES.map((c) => (
+                    {listaColecciones.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.label}
                       </option>

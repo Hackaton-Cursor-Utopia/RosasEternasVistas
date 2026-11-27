@@ -97,11 +97,18 @@ export async function fetchProductos(): Promise<Producto[]> {
     return obtenerProductosMemoria()
   }
 
-  const payload = await api.get<ListaRespuesta<Record<string, unknown>> | Record<string, unknown>[]>(
-    '/products',
-  )
-  const rows = Array.isArray(payload) ? payload : payload.datos
-  return rows.map(asProducto)
+  try {
+    const payload = await api.get<ListaRespuesta<Record<string, unknown>> | Record<string, unknown>[]>(
+      '/products',
+    )
+    const rows = Array.isArray(payload) ? payload : (payload?.datos ?? [])
+    const prods = rows.map(asProducto)
+    guardarProductosMemoria(prods)
+    return prods
+  } catch (err) {
+    console.warn('Error al conectar con /api/products:', err)
+    return obtenerProductosMemoria()
+  }
 }
 
 export async function createProducto(body: CrearProductoRequest): Promise<Producto> {

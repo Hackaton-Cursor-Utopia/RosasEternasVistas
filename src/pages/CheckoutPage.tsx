@@ -5,6 +5,7 @@ import { useCheckout } from '../context/CheckoutContext'
 import { ATELIER, ENVIO_CDMX, SUCURSALES } from '../lib/atelier'
 import { formatMxn } from '../lib/format'
 import { guardarPedidoLocal } from '../lib/ordersStorage'
+import { createPedido } from '../api/orders'
 import { PRODUCTOS_MOCK } from '../mocks/products.mock'
 import type { MetodoEntrega, ModalidadPago, Producto } from '../types/models'
 
@@ -107,8 +108,8 @@ export function CheckoutPage() {
         ? `${calleNumero} ${interior ? `Int ${interior}` : ''}, Col. ${colonia}, C.P. ${codigoPostal}. Ref: ${referencias || 'Ninguna'}`
         : sucursalSeleccionada.direccion
 
-    // Guardar en pedidos locales del dispositivo
-    guardarPedidoLocal({
+    // Guardar en pedidos locales y sincronizar con la API real
+    const nuevoPedido = {
       id: crypto.randomUUID(),
       folio,
       fecha: new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }),
@@ -124,13 +125,14 @@ export function CheckoutPage() {
       total,
       pagadoHoy: pagasHoy,
       saldoRestante: saldoAlRecibir,
-      estado: 'taller',
+      estado: 'taller' as const,
       referencia: ref,
-    })
+    }
 
-    setTimeout(() => {
-      navigate(`/confirmacion/${folio}`)
-    }, 600)
+    createPedido(nuevoPedido)
+      .finally(() => {
+        navigate(`/confirmacion/${folio}`)
+      })
   }
 
   return (

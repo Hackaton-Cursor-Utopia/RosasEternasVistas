@@ -4,13 +4,14 @@ import { BottomNav } from '../components/layout/BottomNav'
 import { WhatsAppFab } from '../components/layout/WhatsAppFab'
 import { AdminDashboard } from '../components/panel/AdminDashboard'
 import { AgregarProductoForm } from '../components/panel/AgregarProductoForm'
+import { CatalogoDescriptivoManager } from '../components/panel/CatalogoDescriptivoManager'
 import { LibroPedidos } from '../components/panel/LibroPedidos'
 import { VendedorExpress } from '../components/panel/VendedorExpress'
 import { Icon } from '../components/ui/Icon'
 import { ATELIER } from '../lib/atelier'
 
 type ModoPanel = 'vender' | 'administrar'
-type SubTabAdmin = 'dashboard' | 'pedidos' | 'agregar'
+type SubTabAdmin = 'dashboard' | 'pedidos' | 'agregar' | 'materiales'
 type SubTabVendedor = 'rapida' | 'pedidos'
 
 export function PanelPage() {
@@ -188,7 +189,19 @@ export function PanelPage() {
               }`}
             >
               <Icon name="add" className="text-[16px]" />
-              Agregar Ramo
+              Ramos en Catálogo
+            </button>
+            <button
+              type="button"
+              onClick={() => setTabAdmin('materiales')}
+              className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-bold transition-all ${
+                tabAdmin === 'materiales'
+                  ? 'bg-primary text-on-primary shadow-sm'
+                  : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
+              }`}
+            >
+              <Icon name="palette" className="text-[16px]" />
+              Colores, Papeles & Extras
             </button>
           </div>
         )}
@@ -208,6 +221,8 @@ export function PanelPage() {
             />
           ) : tabAdmin === 'pedidos' ? (
             <LibroPedidos />
+          ) : tabAdmin === 'materiales' ? (
+            <CatalogoDescriptivoManager />
           ) : (
             <AgregarProductoForm
               onSuccess={() => setTabAdmin('dashboard')}

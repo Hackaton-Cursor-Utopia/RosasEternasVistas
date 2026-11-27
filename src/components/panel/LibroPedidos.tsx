@@ -9,6 +9,11 @@ import {
   liquidarSaldoPedido,
   type PedidoGuardado,
 } from '../../lib/ordersStorage'
+import {
+  fetchPedidos,
+  updateEstadoPedido,
+  liquidarSaldoPedidoApi,
+} from '../../api/orders'
 
 type FiltroEstado = 'todos' | 'taller' | 'listo' | 'envio' | 'liquidar' | 'entregado'
 
@@ -29,9 +34,9 @@ export function LibroPedidos() {
   const [mostrarQrSaldo, setMostrarQrSaldo] = useState(false)
   const [procesandoPago, setProcesandoPago] = useState(false)
 
-  // Cargar pedidos reactivamente y sincronizar con storage
-  const recargarPedidos = () => {
-    const list = obtenerPedidosLocales()
+  // Cargar pedidos reactivamente desde la API y sincronizar con storage
+  const recargarPedidos = async () => {
+    const list = await fetchPedidos()
     setPedidos(list)
     if (pedidoDetalle) {
       const updated = list.find((p) => p.folio === pedidoDetalle.folio)
@@ -41,7 +46,9 @@ export function LibroPedidos() {
 
   useEffect(() => {
     recargarPedidos()
-    const handleUpdate = () => recargarPedidos()
+    const handleUpdate = () => {
+      recargarPedidos()
+    }
     window.addEventListener('pedidos-updated', handleUpdate)
     return () => window.removeEventListener('pedidos-updated', handleUpdate)
   }, [])
@@ -53,9 +60,9 @@ export function LibroPedidos() {
     return p.estado === filtro
   })
 
-  const handleCambiarEstado = (nuevoEstado: 'taller' | 'listo' | 'envio' | 'entregado') => {
+  const handleCambiarEstado = async (nuevoEstado: 'taller' | 'listo' | 'envio' | 'entregado') => {
     if (!pedidoDetalle) return
-    const actualizado = cambiarEstadoPedido(pedidoDetalle.folio, nuevoEstado)
+    const actualizado = await updateEstadoPedido(pedidoDetalle.folio, nuevoEstado)
     if (actualizado) {
       setPedidoDetalle(actualizado)
       recargarPedidos()
@@ -63,21 +70,22 @@ export function LibroPedidos() {
   }
 
   // Liquidar saldo automáticamente desde QR o taller
-  const handleLiquidarSaldoAutomatico = (marcarComoEntregado = false) => {
+  const handleLiquidarSaldoAutomatico = async (marcarComoEntregado = false) => {
     if (!pedidoDetalle) return
     setProcesandoPago(true)
 
-    setTimeout(() => {
-      let actualizado = liquidarSaldoPedido(pedidoDetalle.folio)
+    try {
+      let actualizado = await liquidarSaldoPedidoApi(pedidoDetalle.folio)
       if (marcarComoEntregado && actualizado) {
-        actualizado = cambiarEstadoPedido(pedidoDetalle.folio, 'entregado')
+        actualizado = await updateEstadoPedido(pedidoDetalle.folio, 'entregado')
       }
       if (actualizado) {
         setPedidoDetalle(actualizado)
         recargarPedidos()
       }
+    } finally {
       setProcesandoPago(false)
-    }, 400)
+    }
   }
 
   const handleCopiarFolio = (folio: string) => {

@@ -11,18 +11,56 @@ import {
 import { formatMxn, formatMxnExact } from '../../lib/format'
 import { waUrl } from '../../lib/whatsapp'
 import { obtenerProductosMemoria } from '../../api/products'
+import { solicitarQrCobroCodi } from '../../api/payments'
+import { createPedido } from '../../api/orders'
+import { fetchCatalogos, type CatalogosAgrupados } from '../../api/catalogos'
 import { guardarPedidoLocal, type PedidoGuardado } from '../../lib/ordersStorage'
 import type { MetodoEntrega, ModalidadPago } from '../../types/models'
 
 export function VendedorExpress() {
   // Catálogo reactivo con existencias del taller
   const [catalogoTaller, setCatalogoTaller] = useState(() => obtenerProductosMemoria())
+  const [catalogosBD, setCatalogosBD] = useState<CatalogosAgrupados>({})
+
+  useEffect(() => {
+    fetchCatalogos().then(setCatalogosBD)
+    const handleCat = () => fetchCatalogos().then(setCatalogosBD)
+    window.addEventListener('catalogos-updated', handleCat)
+    return () => window.removeEventListener('catalogos-updated', handleCat)
+  }, [])
 
   useEffect(() => {
     const handleUpdate = () => setCatalogoTaller(obtenerProductosMemoria())
     window.addEventListener('catalogo-updated', handleUpdate)
     return () => window.removeEventListener('catalogo-updated', handleUpdate)
   }, [])
+
+  const listaRosas = (catalogosBD.ColoresRosas && catalogosBD.ColoresRosas.length > 0
+    ? catalogosBD.ColoresRosas
+    : LISTONES
+  ).map((c) => ({
+    id: c.nombre || (c as any).id,
+    nombre: c.nombre,
+    hex: c.valorhex || (c as any).hex || '#6b1d2f',
+  }))
+
+  const listaPapeles = (catalogosBD.Papeles && catalogosBD.Papeles.length > 0
+    ? catalogosBD.Papeles
+    : PAPELES
+  ).map((p) => ({
+    id: p.clave || (p as any).id,
+    nombre: p.nombre,
+    hex: p.valorhex || (p as any).hex || '#f5efe6',
+  }))
+
+  const listaMonos = (catalogosBD.Listones && catalogosBD.Listones.length > 0
+    ? catalogosBD.Listones
+    : COLORES_MONO
+  ).map((m) => ({
+    id: m.nombre || (m as any).id,
+    nombre: m.nombre,
+    hex: m.valorhex || (m as any).hex || '#6b1d2f',
+  }))
 
   const ramosExistencia = catalogoTaller.filter((p) => p.stock > 0 && p.estado !== 'agotado')
 
@@ -70,6 +108,7 @@ export function VendedorExpress() {
   const [qrGenerado, setQrGenerado] = useState(false)
   const [cargandoQr, setCargandoQr] = useState(false)
   const [horaGeneracionQr, setHoraGeneracionQr] = useState<string | null>(null)
+  const [qrStringApi, setQrStringApi] = useState<string | null>(null)
 
   // Feedback de guardado
   const [pedidoGuardadoExito, setPedidoGuardadoExito] = useState<PedidoGuardado | null>(null)
@@ -82,8 +121,8 @@ export function VendedorExpress() {
   const ramoSeleccionadoExpress =
     RAMOS_EXPRESS.find((r) => r.rosas === rosas) ?? RAMOS_EXPRESS[1]
 
-  const papelObj1 = PAPELES.find((p) => p.id === papelId1) ?? PAPELES[0]
-  const papelObj2 = PAPELES.find((p) => p.id === papelId2) ?? PAPELES[4]
+  const papelObj1 = listaPapeles.find((p) => p.id === papelId1) ?? listaPapeles[0] ?? { nombre: 'Traslúcido Marfil' }
+  const papelObj2 = listaPapeles.find((p) => p.id === papelId2) ?? listaPapeles[4] ?? listaPapeles[0] ?? { nombre: 'Dorado Champán' }
 
   // Formateo de texto de colores para encargo
   const textoColorRosas =
@@ -119,19 +158,27 @@ export function VendedorExpress() {
   const mostrarDedicatoria = esExistencia ? entrega === 'envio' : true
 
   // Petición a la API para generar el Código QR de Cobro
-  const handleSolicitarQrApi = () => {
+  const handleSolicitarQrApi = async () => {
     setCargandoQr(true)
-    setTimeout(() => {
+    try {
+      const res = await solicitarQrCobroCodi(referencia, montoATransferir, `Cobro ${nombreRamo}`)
+      if (res && res.qrString) {
+        setQrStringApi(res.qrString)
+      }
       setQrGenerado(true)
-      setCargandoQr(false)
       setHoraGeneracionQr(
         new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
       )
       tarjetaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 600)
+    } catch (err) {
+      console.warn('Error al solicitar QR a la API:', err)
+      setQrGenerado(true)
+    } finally {
+      setCargandoQr(false)
+    }
   }
 
-  // Registrar Pedido en el Libro de Pedidos local
+  // Registrar Pedido en el Libro de Pedidos y sincronizar con la API
   const handleRegistrarVenta = () => {
     const randomSuffix = Math.floor(1000 + Math.random() * 9000)
     const nuevoFolio = esExistencia ? `DE-EX-${randomSuffix}` : `DE-EN-${randomSuffix}`
@@ -174,7 +221,7 @@ export function VendedorExpress() {
       activo: true,
     }
 
-    guardarPedidoLocal(nuevoPedido)
+    createPedido(nuevoPedido)
     setPedidoGuardadoExito(nuevoPedido)
     tarjetaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -423,7 +470,7 @@ ${modalidad === 'anticipo' ? `📦 *Saldo al entregar:* ${formatMxn(total - mont
                   Color Principal de las Rosas:
                 </span>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {LISTONES.map((item) => {
+                  {listaRosas.map((item) => {
                     const selected = rosaColor1 === item.id
                     return (
                       <button
@@ -457,7 +504,7 @@ ${modalidad === 'anticipo' ? `📦 *Saldo al entregar:* ${formatMxn(total - mont
                     Segundo Color Combinado de las Rosas (Máx. 2 colores):
                   </span>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {LISTONES.map((item) => {
+                    {listaRosas.map((item) => {
                       const selected = rosaColor2 === item.id
                       return (
                         <button
@@ -515,7 +562,7 @@ ${modalidad === 'anticipo' ? `📦 *Saldo al entregar:* ${formatMxn(total - mont
                   Pliego Principal de Papel:
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {PAPELES.map((item) => {
+                  {listaPapeles.map((item) => {
                     const selected = papelId1 === item.id
                     return (
                       <button
@@ -555,7 +602,7 @@ ${modalidad === 'anticipo' ? `📦 *Saldo al entregar:* ${formatMxn(total - mont
                     Segundo Pliego de Papel (Máx. 2 colores):
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {PAPELES.map((item) => {
+                    {listaPapeles.map((item) => {
                       const selected = papelId2 === item.id
                       return (
                         <button
@@ -597,7 +644,7 @@ ${modalidad === 'anticipo' ? `📦 *Saldo al entregar:* ${formatMxn(total - mont
                 <span className="text-primary font-bold">{monoColor}</span>
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {COLORES_MONO.map((item) => {
+                {listaMonos.map((item) => {
                   const selected = monoColor === item.id
                   return (
                     <button
@@ -957,7 +1004,7 @@ ${modalidad === 'anticipo' ? `📦 *Saldo al entregar:* ${formatMxn(total - mont
               <div className="flex flex-col items-center justify-center gap-3 w-full animate-fade-in">
                 <div className="flex flex-col items-center justify-center rounded-2xl bg-white p-4 shadow-md ring-1 ring-black/10">
                   <QRCodeSVG
-                    value={qrData}
+                    value={qrStringApi || qrData}
                     size={175}
                     level="M"
                     marginSize={1}

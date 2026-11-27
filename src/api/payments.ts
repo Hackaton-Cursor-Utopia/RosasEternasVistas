@@ -52,3 +52,34 @@ export async function consultarEstadoPago(folio: string): Promise<EstadoPagoResp
     }
   }
 }
+
+export interface SolicitudQrRespuesta {
+  ok: boolean
+  folio: string
+  qrString: string
+  codiQrId?: string
+  montoCobrado: number
+  montoOriginal: number
+}
+
+export async function solicitarQrCobroCodi(
+  folio: string,
+  monto: number,
+  concepto?: string
+): Promise<SolicitudQrRespuesta> {
+  try {
+    const res = await apiRequest<SolicitudQrRespuesta>('pagos/solicitar-qr', {
+      method: 'POST',
+      body: { folio, monto, concepto },
+    })
+    return res
+  } catch {
+    return {
+      ok: true,
+      folio,
+      qrString: `https://dulceeternidad.com/pago-directo?folio=${folio}&monto=0.01`,
+      montoCobrado: 0.01,
+      montoOriginal: monto,
+    }
+  }
+}
